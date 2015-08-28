@@ -1,13 +1,9 @@
 __author__ = 'pli'
 #!/usr/bin/python
 
-import sys
 import os
-import glob
-import requests
 import time
 from datetime import datetime
-import json
 import podiumApiUtils as utils
 
 # Global Variables
@@ -25,6 +21,20 @@ PodiumApp = dict(
 
 AAMSourceId=129
 AAMPrepSourceId=143
+
+# This var defines the frequency of checking entity data loading.
+# The unit is second. This can be modified in terms of different
+# size of loading data. Since AAM loading is typicall 5 - 7 mins,
+# Thus, we recommend using 1 min as the chekcing frequency.
+EntityLoadCheckPolling = 60
+
+# This var defines the frequency of checking new data in S3 bucket.
+# The unit is second. This can be modified in terms of different
+# client product requirement. Since AAM product load in new data
+# in S3 every hour, so 5 - 10 min is a good choice for each check.
+# The smaller the value is, the more precise, however, the more
+# CPU-consuming since it is a polling mechanism.
+NewDataCheckPolling = 300
 
 ######################################
 # Name: Main() Function
@@ -45,15 +55,18 @@ def main():
     currentDataList = utils.getS3DataList(bucket)
 
     # Get current data list state
-    currentState = utils.getGannettDataInfo(currentDataList[len(currentDataList)-1])
+    currentState = utils.getGannettDataInfo(
+        currentDataList[len(currentDataList)-1])
 
     #lastState = dict(day='2015-08-25', hour='19', file='AAM_CDF_1244_000000_0.gz')
 
     # Get entity ID for AAMSourceId
-    entityId = utils.getEntityId(utils.getEntityObjectList(PodiumApp,s,AAMSourceId))
+    entityId = utils.getEntityId(
+        utils.getEntityObjectList(PodiumApp,s,AAMSourceId))
 
     # Get entity IDs for AAMPrepSourceId
-    entityList  = utils.getEntityIdList(utils.getEntityObjectList(PodiumApp,s,AAMPrepSourceId))
+    entityList  = utils.getEntityIdList(
+        utils.getEntityObjectList(PodiumApp,s,AAMPrepSourceId))
 
     while True:
         # Assign last state with current state every loop
@@ -64,7 +77,8 @@ def main():
         currentDataList = utils.getS3DataList(bucket)
 
         # Update current data list state
-        currentState = utils.getGannettDataInfo(currentDataList[len(currentDataList)-1])
+        currentState = utils.getGannettDataInfo(
+            currentDataList[len(currentDataList)-1])
 
         # Test if current state still equals to last state
         if utils.testIfNeedLoad(lastState, currentState):
@@ -73,7 +87,8 @@ def main():
 
             # Get entity's old properties
             utils.printStepHeader(2, "Retrieve old props")
-            oldProp = utils.getEntityProps(utils.getEntityInfo(PodiumApp,s,entityId))
+            oldProp = utils.getEntityProps(
+                utils.getEntityInfo(PodiumApp,s,entityId))
 
             # Generate NEW properties with last state
             utils.printStepHeader(3, "Generate new props")
@@ -93,25 +108,26 @@ def main():
             # Check if load finished
             utils.printStepHeader(6, "Wait for entity loading finished")
             while not \
-                utils.checkLoadFinishedForEntity(utils.getLoadLogsForEntity(PodiumApp,s,entityId)):
-                time.sleep(60)
+                utils.checkLoadFinishedForEntity(
+                    utils.getLoadLogsForEntity(PodiumApp,s,entityId)):
+                time.sleep(EntityLoadCheckPolling)
             print "Loading data for entity finished"
 
             # Execute Hive Script
             utils.printStepHeader(7, "Execute Hive Scripts")
-            print "Hive step 1 ..."
+            print " --> Hive step 1 ..."
             os.system("hive -f step1.sql")
 
-            print "Hive step 2 ..."
+            print " --> Hive step 2 ..."
             os.system("hive -f step2.sql")
 
-            print "Hive step 3 ..."
+            print " --> Hive step 3 ..."
             os.system("hive -f step3.sql")
 
-            print "Hive step 4 ..."
+            print " --> Hive step 4 ..."
             os.system("hive -f step4.sql")
 
-            print "Hive step 5 ..."
+            print " --> Hive step 5 ..."
             os.system("hive -f step5.sql")
 
             # Load data for entities
@@ -123,19 +139,20 @@ def main():
             while not \
                 utils.checkLoadFinishedForEntities(
                         utils.getLoadLogsForEntities(PodiumApp,s,entityList)):
-                time.sleep(60)
+                time.sleep(EntityLoadCheckPolling)
             print "Loading data for entities finished"
 
             # Preprocess End
             endtime = time.time()
 
             # Calculate Total Runtime:
-            print "\nTotal Preprocessing Time: %f seconds" % (endtime - starttime)
+            print "\nTotal Preprocessing Time: %f seconds" % \
+                  (endtime - starttime)
 
         else:
             print "%s: No new data added" % datetime.now()
             print "Waiting for next checking cycle ..."
-            time.sleep(300)
+            time.sleep(NewDataCheckPolling)
 
 if __name__ == "__main__":
     main()

@@ -1,14 +1,24 @@
 # How To Use AAM Automation Tools
 
-The AAM automation uses python scripts and requires multiple external python libraries to do the magic. These libraries are: requests, boto, and json. If these libraries are not default in your system, please install them before using. To install these libraries, simply type in “pip install boto” in your terminal console. If you do not have pip installed, go ahead install it.
+The AAM automation uses python scripts and requires multiple external 
+python libraries to do the magic. These libraries are: requests, boto, 
+and json. If these libraries are not default in your system, please 
+install them before using. To install these libraries, simply type in 
+“pip install boto” in your terminal console. If you do not have pip 
+installed, go ahead install it.
 
 ## Section 1: The Podium API Utilities Library
 
-“podiumApiUtils.py” is a wrapper library that provides better Podium APIs usage experience. The library currently provides quite a few functions that manipulate Podium entity APIs. This library is also a good place for future Podium wrappers. 
+“podiumApiUtils.py” is a wrapper library that provides better Podium 
+APIs usage experience. The library currently provides quite a few 
+functions that manipulate Podium entity APIs. This library is also 
+a good place for future Podium wrappers. 
 
-Detailed usage information of each function is well commented in lines, which includes the inputs parameters, output format and the functionalities. 
+Detailed usage information of each function is well commented in lines, 
+which includes the inputs parameters, output format and the functionalities. 
 
-Here is a sample code that uses the wrapper library for data loading and etc. 
+Here is a sample code that uses the wrapper library for data loading 
+and etc. 
 
 <pre><code>
 __author__ = 'pli'
@@ -102,7 +112,8 @@ if __name__ == "__main__":
 The logic diagram of AAM automation is attached. 
 
 The basic steps are described as following:
-1. Define the PodiumApp parameters. Basically, you need to put in the host name and port where podium is installed. Change the app user name, password and etc. 
+1. Define the PodiumApp parameters. Basically, you need to put in the host name 
+and port where podium is installed. Change the app user name, password and etc. 
 PodiumApp = dict(
     hostname="<host>",
     port="8080",
@@ -118,21 +129,42 @@ PodiumApp = dict(
 
 3. Get S3 bucket handler by using ‘getS3Bucket'
 
-4. Get the single entity ID for Adobe Audience Manager by using 'getEntityId'
+4. Get the single entity ID for Adobe Audience Manager by using 'getEntityId'. 
+Currently, one has to provide the entity source ID in order to get the entity id 
+or a list of entity IDs. Getting entity source ID cannot be automated because 
+there is no such Podium APIs that support it. Simple Postgres SQL can be used 
+to obtain entity source id. For example, the follwoing SQL command will return 
+every details about the entity:
+<pre><code>select *
+           from podium_core.pd_entity pe  
+           	join podium_core.pd_source ps 
+           		on ps.nid = pe.source_nid 
+           where pe.sname = 'Adobe_Audience_Manager' 
+           	and pe.entity_type = 'EXTERNAL'; </code></pre>
 
 5. Get the multiple entity ID list for Adobe Audience Prep by using 'getEntityList'
  
-6. Since S3 does not provide an ‘event’ mechanism, we need to polling the list of S3 bucket to see if there is new data with the latest hour time stamp comes in. This is a continuous polling mechanism and the frequency of the polling delay should be set. 
+6. Since S3 does not provide an ‘event’ mechanism, we need to polling the list 
+of S3 bucket to see if there is new data with the latest hour time stamp comes 
+in. This is a continuous polling mechanism and the frequency of the polling delay 
+should be set. 
 
-7. If new data comes in, then we should update the src.file.glob property for the entity and load the new data. Use ‘updateEntityProp’ to update the property and use ‘updateEntity’ to load new data in the entity.
+7. If new data comes in, then we should update the src.file.glob property for the 
+entity and load the new data. Use ‘updateEntityProp’ to update the property and 
+use ‘updateEntity’ to load new data in the entity.
 
-8. Since data loading to entity takes a couple of minutes depending on the data size, we need to wait the data loading finished then proceed to the next step. Use ‘checkLoadFinishedForEntity’ to check the loading progress.
+8. Since data loading to entity takes a couple of minutes depending on the data 
+size, we need to wait the data loading finished then proceed to the next step. 
+Use ‘checkLoadFinishedForEntity’ to check the loading progress.
 
-9. Run the HIVE scripts within python context by using os.system(‘hive -f hiveScriptName.sql')
+9. Run the HIVE scripts within python context by using 
+<pre><code>os.system(‘hive -f hiveScriptName.sql')</code></pre>
 
-10. Load data for Adobe Audience Prep by using ‘updateEntityList’ since Adobe Audience Prep has a list of entities.
+10. Load data for Adobe Audience Prep by using ‘updateEntityList’ since Adobe 
+Audience Prep has a list of entities.
 
 11. Again, wait the data loading until it’s finished. 
 
-12. This will conclude a whole cycle of AAM data preprocessing. Wait for the polling delay and enter the next checking cycle. 
+12. This will conclude a whole cycle of AAM data preprocessing. Wait for the 
+polling delay and enter the next checking cycle. 
 
